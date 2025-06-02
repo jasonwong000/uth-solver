@@ -9,7 +9,7 @@ import os
 st.set_page_config(layout="wide")
 
 ###########################
-# 2) Custom CSS to style
+# 2) Custom CSS
 ###########################
 CUSTOM_CSS = """
 <style>
@@ -41,8 +41,7 @@ def create_treys_full_deck():
 
 def dealer_qualifies(dealer_7):
     val = evaluator.evaluate([], dealer_7)
-    rclass = evaluator.get_rank_class(val)
-    return (rclass <= 9)  # Pair or better
+    return (evaluator.get_rank_class(val) <= 9)
 
 
 def compare_hands(player_7, dealer_7):
@@ -59,7 +58,7 @@ def compare_hands(player_7, dealer_7):
 def hand_category_0to9(cards7):
     val = evaluator.evaluate([], cards7)
     rclass = evaluator.get_rank_class(val)
-    return 10 - rclass  # 9=Royal,...,0=HC
+    return 10 - rclass
 
 
 def blind_payout_multiplier(cat_0to9):
@@ -86,20 +85,17 @@ def payout_final_decision(player_7, dealer_7, ante, blind, play):
     cat = hand_category_0to9(player_7)
 
     net = 0.0
-    # PLAY
     if outcome > 0:
         net += play
     elif outcome < 0:
         net -= play
 
-    # ANTE
     if dq:
         if outcome > 0:
             net += ante
         elif outcome < 0:
             net -= ante
 
-    # BLIND
     if outcome > 0:
         multi = blind_payout_multiplier(cat)
         if multi > 0:
@@ -110,28 +106,24 @@ def payout_final_decision(player_7, dealer_7, ante, blind, play):
 
 
 def river_ev_compare_treys(player_cards, board_cards, dead_cards):
-    """
-    Compare EV of fold vs bet 1x at the river,
-    with ante=1.0 and blind=1.0 (no user override).
-    """
     ante = 1.0
     blind = 1.0
 
-    full_deck = create_treys_full_deck()
+    deck = create_treys_full_deck()
     known = set(player_cards + board_cards + dead_cards)
-    remaining_deck = [c for c in full_deck if c not in known]
+    remaining = [c for c in deck if c not in known]
 
-    player_7 = player_cards + board_cards
-    dealer_combos = list(combinations(remaining_deck, 2))
-
+    combos = list(combinations(remaining, 2))
     ev_fold = -(ante + blind)
     sum_bet = 0.0
-    for dc in dealer_combos:
+
+    player_7 = player_cards + board_cards
+    for dc in combos:
         dealer_7 = list(dc) + board_cards
         payoff = payout_final_decision(player_7, dealer_7, ante, blind, ante)
         sum_bet += payoff
 
-    ev_bet = sum_bet / len(dealer_combos) if dealer_combos else 0.0
+    ev_bet = sum_bet / len(combos) if combos else 0.0
     delta_ev = ev_bet - ev_fold
     rec = "BET 1X" if delta_ev > 0 else "FOLD"
     return {
@@ -143,24 +135,68 @@ def river_ev_compare_treys(player_cards, board_cards, dead_cards):
 
 
 ###########################
-# 4) Display Helpers
+# 4) 4-Color ASCII suits
+###########################
+SUIT_SYMBOLS = {
+    'c': '♣',  # clubs
+    'd': '♦',  # diamonds
+    'h': '♥',  # hearts
+    's': '♠'  # spades
+}
+
+
+def suit_color(suit_char):
+    """
+    4-color suits:
+      - clubs => green
+      - diamonds => #00bfff (light blue)
+      - hearts => red
+      - spades => grey
+    """
+    if suit_char == 'c':
+        return 'green'
+    elif suit_char == 'd':
+        return '#00bfff'
+    elif suit_char == 'h':
+        return 'red'
+    else:
+        return 'grey'  # spades => grey
+
+
+def get_colored_card_str(card_int):
+    """ e.g. <span style="color:#00bfff">A♦</span> for Ad, spade => grey """
+    c_str = Card.int_to_str(card_int)  # e.g. "As"
+    rank, suit = c_str[0], c_str[1]
+    ascii_suit = SUIT_SYMBOLS[suit]
+    color = suit_color(suit)
+    return f'<span style="color:{color}">{rank}{ascii_suit}</span>'
+
+
+def get_card_line(cards):
+    return ' '.join(get_colored_card_str(c) for c in cards)
+
+
+def generate_first_line(player_cards, board_cards, dead_cards):
+    p_str = get_card_line(player_cards)
+    b_str = get_card_line(board_cards)
+    d_str = get_card_line(dead_cards)
+    return f"{p_str} | {b_str} | {d_str}"
+
+
+###########################
+# 5) Display placeholders
 ###########################
 def show_slot_image(card_int_or_none):
-    """
-    If None -> 'empty_card.png' (width=45).
-    Otherwise -> generate e.g. 'ad.png', 'td.png' from the rank-suit string's .lower().
-    """
     if card_int_or_none is None:
-        empty_path = os.path.join("cards", "empty_card.png")
-        if os.path.exists(empty_path):
-            st.image(empty_path, width=45)
+        path = os.path.join("cards", "empty_card.png")
+        if os.path.exists(path):
+            st.image(path, width=45)
         else:
             st.write("[Empty Slot]")
     else:
-        label = Card.int_to_str(card_int_or_none)  # e.g. "Ad", "Tc"
-        # Convert to all-lowercase for the file name
-        filename = f"{label.lower()}.png"  # e.g. "ad.png", "tc.png"
-        path = os.path.join("cards", filename)
+        label = Card.int_to_str(card_int_or_none)
+        fname = f"{label.lower()}.png"
+        path = os.path.join("cards", fname)
         if os.path.exists(path):
             st.image(path, width=45)
         else:
@@ -168,14 +204,9 @@ def show_slot_image(card_int_or_none):
 
 
 def display_fixed_slots(title_str, cards_list, capacity, prefix):
-    """
-    Show 'capacity' horizontal slots (2 player, 5 board, 10 dead).
-    If a card is present, show that card + a ❌ button in the same column.
-    """
     st.write(f"**{title_str}**")
     col_widths = [0.07] * capacity + [max(0, 1 - 0.07 * capacity)]
     cols = st.columns(col_widths, gap="small")
-
     for i in range(capacity):
         if i >= len(cols) - 1:
             break
@@ -183,20 +214,17 @@ def display_fixed_slots(title_str, cards_list, capacity, prefix):
             if i < len(cards_list):
                 c_int = cards_list[i]
                 show_slot_image(c_int)
-                # 'x' button
                 if st.button("❌", key=f"{prefix}_remove_{c_int}", use_container_width=True):
                     cards_list.remove(c_int)
                     st.rerun()
             else:
-                # empty
                 show_slot_image(None)
 
 
 ###########################
-# 5) Main
+# 6) Main
 ###########################
 def main():
-    # Title row: left is heading, right is 'Clear All'
     top_bar = st.columns([0.8, 0.2], gap="small")
     with top_bar[0]:
         st.title("UTH - River Solver")
@@ -207,7 +235,6 @@ def main():
             st.session_state.dead_cards = []
             st.rerun()
 
-    # Init session state
     if "player_cards" not in st.session_state:
         st.session_state.player_cards = []
     if "board_cards" not in st.session_state:
@@ -215,32 +242,36 @@ def main():
     if "dead_cards" not in st.session_state:
         st.session_state.dead_cards = []
 
-    # Auto-calc EV if 2 player + 5 board
+    # 4-colored suit line
+    first_line_html = generate_first_line(
+        st.session_state.player_cards,
+        st.session_state.board_cards,
+        st.session_state.dead_cards
+    )
+
+    st.markdown(first_line_html, unsafe_allow_html=True)
+
     valid = (len(st.session_state.player_cards) == 2
              and len(st.session_state.board_cards) == 5)
-    ev_container = st.container()
     if valid:
-        results = river_ev_compare_treys(
+        res = river_ev_compare_treys(
             st.session_state.player_cards,
             st.session_state.board_cards,
             st.session_state.dead_cards
         )
-        with ev_container:
-            st.info(f"""**EV if Bet 1x:** {results['EV_bet']:.3f}
+        st.info(f"""**EV if Bet 1x:** {res['EV_bet']:.3f}
 
-**EV if Fold:** {results['EV_fold']:.3f}
+**EV if Fold:** {res['EV_fold']:.3f}
 
-**Delta EV:** {results['Delta_EV']:.3f}
+**Delta EV:** {res['Delta_EV']:.3f}
 
-**Recommendation:** {results['Recommended']}""")
+**Recommendation:** {res['Recommended']}""")
     else:
-        with ev_container:
-            st.info("Select exactly 2 Player Cards and 5 Board Cards to see EV.")
+        st.info("Select exactly 2 Player Cards and 5 Board Cards to see EV.")
 
     st.write("---")
     st.subheader("Currently Selected")
 
-    # 2 Player, 5 Board, 10 Dead
     display_fixed_slots("Player Cards", st.session_state.player_cards, 2, "player")
     display_fixed_slots("Board", st.session_state.board_cards, 5, "board")
     display_fixed_slots("Dead Cards", st.session_state.dead_cards, 10, "dead")
@@ -248,37 +279,32 @@ def main():
     st.write("---")
     st.subheader("Pick Cards")
 
-    # Hide P/B/D if they're full
     can_pick_player = (len(st.session_state.player_cards) < 2)
     can_pick_board = (len(st.session_state.board_cards) < 5)
     can_pick_dead = (len(st.session_state.dead_cards) < 10)
 
-    # 13 across, 4 down
     ranks = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"]
     suits = ["d", "c", "h", "s"]
 
     for s_i, suit in enumerate(suits):
         row_cols = st.columns(13, gap="small")
         for r_i, rank in enumerate(ranks):
-            card_label = rank + suit  # e.g. 'Ad', 'Tc'
+            card_label = rank + suit
             c_int = Card.new(card_label)
 
-            # If already selected, show the card image (no pick buttons)
             if (c_int in st.session_state.player_cards or
                     c_int in st.session_state.board_cards or
                     c_int in st.session_state.dead_cards):
-                # We do the same .lower() approach
-                filename = f"{card_label.lower()}.png"  # e.g. "ad.png", "tc.png"
-                c_path = os.path.join("cards", filename)
+                fname = f"{card_label.lower()}.png"
+                c_path = os.path.join("cards", fname)
                 if os.path.exists(c_path):
                     row_cols[r_i].image(c_path, width=45)
                 else:
                     row_cols[r_i].write(card_label.lower())
                 continue
 
-            # Not selected => show the card + pick buttons (using .lower() for the image)
-            filename = f"{card_label.lower()}.png"
-            c_path = os.path.join("cards", filename)
+            fname = f"{card_label.lower()}.png"
+            c_path = os.path.join("cards", fname)
             if os.path.exists(c_path):
                 row_cols[r_i].image(c_path, width=45)
             else:
