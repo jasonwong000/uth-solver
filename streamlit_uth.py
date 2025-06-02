@@ -236,7 +236,7 @@ def main():
 **Recommendation:** {results['Recommended']}""")
     else:
         with ev_container:
-            st.info("Select exactly 2 PLayer Cards and 5 Board Cards to see EV.")
+            st.info("Select exactly 2 Player Cards and 5 Board Cards to see EV.")
 
     st.write("---")
     st.subheader("Currently Selected")
