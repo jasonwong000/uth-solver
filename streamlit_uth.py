@@ -109,7 +109,7 @@ def payout_final_decision(player_7, dealer_7, ante, blind, play):
     return net
 
 
-def river_ev_compare_treys(hole_cards, board_cards, dead_cards):
+def river_ev_compare_treys(player_cards, board_cards, dead_cards):
     """
     Compare EV of fold vs bet 1x at the river,
     with ante=1.0 and blind=1.0 (no user override).
@@ -118,10 +118,10 @@ def river_ev_compare_treys(hole_cards, board_cards, dead_cards):
     blind = 1.0
 
     full_deck = create_treys_full_deck()
-    known = set(hole_cards + board_cards + dead_cards)
+    known = set(player_cards + board_cards + dead_cards)
     remaining_deck = [c for c in full_deck if c not in known]
 
-    player_7 = hole_cards + board_cards
+    player_7 = player_cards + board_cards
     dealer_combos = list(combinations(remaining_deck, 2))
 
     ev_fold = -(ante + blind)
@@ -147,8 +147,8 @@ def river_ev_compare_treys(hole_cards, board_cards, dead_cards):
 ###########################
 def show_slot_image(card_int_or_none):
     """
-    If None -> show 'empty_card.png'.
-    Else -> show the card's PNG (width=45).
+    If None -> 'empty_card.png'.
+    Else -> show the card's exact rank-suit name, e.g. 'Ad.png' or 'Tc.png'.
     """
     if card_int_or_none is None:
         empty_path = os.path.join("cards", "empty_card.png")
@@ -157,7 +157,7 @@ def show_slot_image(card_int_or_none):
         else:
             st.write("[Empty Slot]")
     else:
-        label = Card.int_to_str(card_int_or_none).lower()
+        label = Card.int_to_str(card_int_or_none)  # e.g. "Ad", "Tc"
         path = os.path.join("cards", f"{label}.png")
         if os.path.exists(path):
             st.image(path, width=45)
@@ -167,13 +167,10 @@ def show_slot_image(card_int_or_none):
 
 def display_fixed_slots(title_str, cards_list, capacity, prefix):
     """
-    Show 'capacity' horizontal slots (like 2 for hole, 5 for board, 10 for dead).
-    Each slot has an image (the card or empty).
-    If there's a card in the slot, we also show an 'x' button below it
-    in the same column. The button is container-width, matching the image width.
+    Show 'capacity' horizontal slots (2 player, 5 board, 10 dead).
+    If a card is present, show that card + a ❌ button in the same column.
     """
     st.write(f"**{title_str}**")
-    # e.g. capacity=2 => create 3 columns: 2 columns each 0.07 wide + leftover
     col_widths = [0.07] * capacity + [max(0, 1 - 0.07 * capacity)]
     cols = st.columns(col_widths, gap="small")
 
@@ -184,7 +181,7 @@ def display_fixed_slots(title_str, cards_list, capacity, prefix):
             if i < len(cards_list):
                 c_int = cards_list[i]
                 show_slot_image(c_int)
-                # Now the 'x' button (same column, container_width)
+                # 'x' button
                 if st.button("❌", key=f"{prefix}_remove_{c_int}", use_container_width=True):
                     cards_list.remove(c_int)
                     st.rerun()
@@ -203,26 +200,27 @@ def main():
         st.title("UTH - River Solver")
     with top_bar[1]:
         if st.button("Clear All"):
-            st.session_state.hole_cards = []
+            st.session_state.player_cards = []
             st.session_state.board_cards = []
             st.session_state.dead_cards = []
             st.rerun()
 
     # Init session state
-    if "hole_cards" not in st.session_state:
-        st.session_state.hole_cards = []
+    # (Using "player_cards" instead of "hole_cards")
+    if "player_cards" not in st.session_state:
+        st.session_state.player_cards = []
     if "board_cards" not in st.session_state:
         st.session_state.board_cards = []
     if "dead_cards" not in st.session_state:
         st.session_state.dead_cards = []
 
-    # Auto-calc EV if 2 hole + 5 board
-    valid = (len(st.session_state.hole_cards) == 2
+    # Auto-calc EV if 2 player + 5 board
+    valid = (len(st.session_state.player_cards) == 2
              and len(st.session_state.board_cards) == 5)
     ev_container = st.container()
     if valid:
         results = river_ev_compare_treys(
-            st.session_state.hole_cards,
+            st.session_state.player_cards,
             st.session_state.board_cards,
             st.session_state.dead_cards
         )
@@ -241,16 +239,16 @@ def main():
     st.write("---")
     st.subheader("Currently Selected")
 
-    # 2 Hole, 5 Board, 10 Dead
-    display_fixed_slots("Player Cards", st.session_state.hole_cards, 2, "hole")
+    # 2 Player, 5 Board, 10 Dead
+    display_fixed_slots("Player Cards", st.session_state.player_cards, 2, "player")
     display_fixed_slots("Board", st.session_state.board_cards, 5, "board")
     display_fixed_slots("Dead Cards", st.session_state.dead_cards, 10, "dead")
 
     st.write("---")
     st.subheader("Pick Cards")
 
-    # Hide P/B/D if full
-    can_pick_hole = (len(st.session_state.hole_cards) < 2)
+    # Hide P/B/D if they're full
+    can_pick_player = (len(st.session_state.player_cards) < 2)
     can_pick_board = (len(st.session_state.board_cards) < 5)
     can_pick_dead = (len(st.session_state.dead_cards) < 10)
 
@@ -261,31 +259,29 @@ def main():
     for s_i, suit in enumerate(suits):
         row_cols = st.columns(13, gap="small")
         for r_i, rank in enumerate(ranks):
-            card_label = rank + suit
+            card_label = rank + suit  # e.g. 'Ad', 'Tc'
             c_int = Card.new(card_label)
 
-            # If already selected, show the same card image but no pick buttons
-            if (c_int in st.session_state.hole_cards or
+            # If already selected, show the card image (no pick buttons)
+            if (c_int in st.session_state.player_cards or
                     c_int in st.session_state.board_cards or
                     c_int in st.session_state.dead_cards):
-                # just show the card image
-                c_path = os.path.join("cards", f"{card_label.lower()}.png")
+                c_path = os.path.join("cards", f"{card_label}.png")
                 if os.path.exists(c_path):
                     row_cols[r_i].image(c_path, width=45)
                 else:
                     row_cols[r_i].write(card_label)
-                # no pick button
                 continue
 
             # Not selected => show the card + pick buttons
-            c_path = os.path.join("cards", f"{card_label.lower()}.png")
+            c_path = os.path.join("cards", f"{card_label}.png")
             if os.path.exists(c_path):
                 row_cols[r_i].image(c_path, width=45)
             else:
                 row_cols[r_i].write(card_label)
 
             button_row = []
-            if can_pick_hole:
+            if can_pick_player:
                 button_row.append(("P", f"p_{card_label}"))
             if can_pick_board:
                 button_row.append(("B", f"b_{card_label}"))
@@ -296,7 +292,7 @@ def main():
                 clicked = row_cols[r_i].button(txt, key=key)
                 if clicked:
                     if txt == "P":
-                        st.session_state.hole_cards.append(c_int)
+                        st.session_state.player_cards.append(c_int)
                     elif txt == "B":
                         st.session_state.board_cards.append(c_int)
                     elif txt == "D":
