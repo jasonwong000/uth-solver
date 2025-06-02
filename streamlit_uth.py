@@ -135,36 +135,33 @@ def river_ev_compare_treys(player_cards, board_cards, dead_cards):
 
 
 ###########################
-# 4) 4-Color ASCII suits
+# 4) Suit Colors:
+#    Diamonds & Hearts => Red
+#    Clubs & Spades => Grey
 ###########################
 SUIT_SYMBOLS = {
-    'c': '♣',  # clubs
-    'd': '♦',  # diamonds
-    'h': '♥',  # hearts
-    's': '♠'  # spades
+    'c': '♣',
+    'd': '♦',
+    'h': '♥',
+    's': '♠'
 }
 
 
 def suit_color(suit_char):
     """
-    4-color suits:
-      - clubs => green
-      - diamonds => #00bfff (light blue)
-      - hearts => red
-      - spades => grey
+    - clubs (c) = grey
+    - diamonds (d) = red
+    - hearts (h) = red
+    - spades (s) = grey
     """
-    if suit_char == 'c':
-        return 'green'
-    elif suit_char == 'd':
-        return '#00bfff'
-    elif suit_char == 'h':
+    if suit_char in ['d', 'h']:
         return 'red'
     else:
-        return 'grey'  # spades => grey
+        return 'grey'  # c or s
 
 
 def get_colored_card_str(card_int):
-    """ e.g. <span style="color:#00bfff">A♦</span> for Ad, spade => grey """
+    """ e.g. <span style="color:red">A♦</span> for Ad; clubs/spades => grey """
     c_str = Card.int_to_str(card_int)  # e.g. "As"
     rank, suit = c_str[0], c_str[1]
     ascii_suit = SUIT_SYMBOLS[suit]
