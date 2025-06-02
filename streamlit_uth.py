@@ -147,8 +147,8 @@ def river_ev_compare_treys(player_cards, board_cards, dead_cards):
 ###########################
 def show_slot_image(card_int_or_none):
     """
-    If None -> 'empty_card.png'.
-    Else -> show the card's exact rank-suit name, e.g. 'Ad.png' or 'Tc.png'.
+    If None -> 'empty_card.png' (width=45).
+    Otherwise -> generate e.g. 'ad.png', 'td.png' from the rank-suit string's .lower().
     """
     if card_int_or_none is None:
         empty_path = os.path.join("cards", "empty_card.png")
@@ -158,11 +158,13 @@ def show_slot_image(card_int_or_none):
             st.write("[Empty Slot]")
     else:
         label = Card.int_to_str(card_int_or_none)  # e.g. "Ad", "Tc"
-        path = os.path.join("cards", f"{label}.png")
+        # Convert to all-lowercase for the file name
+        filename = f"{label.lower()}.png"  # e.g. "ad.png", "tc.png"
+        path = os.path.join("cards", filename)
         if os.path.exists(path):
             st.image(path, width=45)
         else:
-            st.write(label)
+            st.write(label.lower())
 
 
 def display_fixed_slots(title_str, cards_list, capacity, prefix):
@@ -206,7 +208,6 @@ def main():
             st.rerun()
 
     # Init session state
-    # (Using "player_cards" instead of "hole_cards")
     if "player_cards" not in st.session_state:
         st.session_state.player_cards = []
     if "board_cards" not in st.session_state:
@@ -266,19 +267,22 @@ def main():
             if (c_int in st.session_state.player_cards or
                     c_int in st.session_state.board_cards or
                     c_int in st.session_state.dead_cards):
-                c_path = os.path.join("cards", f"{card_label}.png")
+                # We do the same .lower() approach
+                filename = f"{card_label.lower()}.png"  # e.g. "ad.png", "tc.png"
+                c_path = os.path.join("cards", filename)
                 if os.path.exists(c_path):
                     row_cols[r_i].image(c_path, width=45)
                 else:
-                    row_cols[r_i].write(card_label)
+                    row_cols[r_i].write(card_label.lower())
                 continue
 
-            # Not selected => show the card + pick buttons
-            c_path = os.path.join("cards", f"{card_label}.png")
+            # Not selected => show the card + pick buttons (using .lower() for the image)
+            filename = f"{card_label.lower()}.png"
+            c_path = os.path.join("cards", filename)
             if os.path.exists(c_path):
                 row_cols[r_i].image(c_path, width=45)
             else:
-                row_cols[r_i].write(card_label)
+                row_cols[r_i].write(card_label.lower())
 
             button_row = []
             if can_pick_player:
